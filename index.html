@@ -14,6 +14,7 @@
     --border: rgba(255,255,255,0.09); --text: #e8dcc8; --muted: #7a9e9f; --dim: #888;
     --morning: #4A7C6F; --sleep: #3D5A80; --nutrition: #048A81;
     --symptoms: #C0392B; --treatments: #7B4F9E; --migraine: #B5451B; --notes: #5A6475;
+    --exercise: #2C6E8A;
   }
   body { font-family: Georgia,'Times New Roman',serif; background: linear-gradient(135deg,var(--bg) 0%,var(--bg2) 50%,var(--bg) 100%); min-height:100vh; color:var(--text); padding-bottom:80px; }
   .header { background:rgba(0,0,0,0.45); border-bottom:1px solid var(--border); padding:16px 20px 14px; position:sticky; top:0; z-index:100; }
@@ -63,8 +64,6 @@
   .tag-acu { background:rgba(4,138,129,0.25); border:1px solid var(--nutrition); color:#7ac9b8; }
   .tag-info { color:var(--dim); font-size:12px; }
   .empty-state { color:#444; text-align:center; padding:60px 0; font-size:15px; line-height:1.7; }
-
-  /* Detail view */
   .detail-back { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
   .detail-back button { background:none; border:none; color:var(--muted); font-size:15px; cursor:pointer; font-family:inherit; padding:0; }
   .detail-date { font-size:18px; color:var(--text); }
@@ -76,6 +75,47 @@
   .detail-row.sub { color:var(--dim); font-size:13px; }
   .detail-row.migraine-text { color:#e88; }
   .detail-edit-btn { width:100%; padding:13px; border-radius:9px; background:rgba(74,124,111,0.15); border:1px solid var(--morning); color:#7ac9b8; font-size:14px; font-family:inherit; cursor:pointer; margin-top:4px; }
+
+  /* Exercise suggestion card */
+  .exercise-card {
+    border-radius:16px; overflow:hidden; margin-bottom:18px;
+    border:1px solid rgba(44,110,138,0.4);
+  }
+  .exercise-header {
+    background: #1e4a5c;
+    padding:13px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .exercise-header-left { display:flex; align-items:center; gap:10px; }
+  .exercise-header span { font-size:14px; color:#a8d8ea; letter-spacing:1px; }
+  .exercise-level-badge {
+    font-size:11px; padding:3px 10px; border-radius:12px; font-family:Georgia,serif;
+  }
+  .exercise-body { background:rgba(44,110,138,0.08); padding:20px; }
+  .exercise-intensity { font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#6aafc7; margin-bottom:6px; }
+  .exercise-title { font-size:18px; color:#d4eef8; margin-bottom:10px; line-height:1.3; }
+  .exercise-reason { font-size:13px; color:#7aabbc; line-height:1.6; margin-bottom:16px; }
+  .exercise-options { display:flex; flex-direction:column; gap:8px; }
+  .exercise-option {
+    background:rgba(44,110,138,0.15); border:1px solid rgba(44,110,138,0.3);
+    border-radius:10px; padding:12px 15px;
+    display:flex; align-items:flex-start; gap:12px;
+  }
+  .exercise-option-icon { font-size:20px; flex-shrink:0; margin-top:1px; }
+  .exercise-option-name { font-size:14px; color:#c8e8f4; margin-bottom:2px; }
+  .exercise-option-detail { font-size:12px; color:#6aafc7; line-height:1.5; }
+  .exercise-rest {
+    background:rgba(90,100,117,0.15); border:1px solid rgba(90,100,117,0.3);
+    border-radius:10px; padding:14px 16px; text-align:center;
+  }
+  .exercise-rest-title { font-size:16px; color:#b0b8c4; margin-bottom:4px; }
+  .exercise-rest-sub { font-size:13px; color:#6a7480; }
+  .exercise-warning {
+    background:rgba(181,69,27,0.1); border:1px solid rgba(181,69,27,0.25);
+    border-radius:8px; padding:10px 14px; margin-bottom:14px;
+    font-size:12px; color:#c9886a; line-height:1.5;
+  }
+  .not-enough-data { font-size:13px; color:#6aafc7; font-style:italic; }
 </style>
 </head>
 <body>
@@ -142,13 +182,186 @@ const SECTIONS = [
 let state = { view:"today", sectionIndex:0, current:{date:todayStr(),id:Date.now()}, entries:[], detailDate:null };
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
-
 function save() { try { localStorage.setItem("hlz_entries", JSON.stringify(state.entries)); } catch(e){} }
 function load() { try { const d=localStorage.getItem("hlz_entries"); if(d) state.entries=JSON.parse(d); } catch(e){} }
 
+// ── Exercise suggestion engine ───────────────────────────────────────────────
+function getExerciseSuggestion(entry, entries) {
+  const e = entry;
+  const energy = Number(e.energy) || 0;
+  const sleep = Number(e.sleepQuality) || 0;
+  const hours = Number(e.hoursSlept) || 0;
+  const nausea = e.nausea || "None";
+  const migraine = e.migraine === "Yes";
+  const appetite = e.appetite || "Normal";
+
+  // Check if yesterday was a GLP shot day
+  const yesterday = new Date(e.date+"T12:00:00");
+  yesterday.setDate(yesterday.getDate()-1);
+  const yStr = yesterday.toISOString().split("T")[0];
+  const yEntry = entries.find(x=>x.date===yStr);
+  const dayAfterShot = yEntry && yEntry.glpShot==="Yes";
+  const shotToday = e.glpShot === "Yes";
+
+  // Not enough data to make a suggestion
+  if (!energy && !sleep) return null;
+
+  // Build warnings
+  const warnings = [];
+  if (migraine) warnings.push("You have an active migraine — rest is the priority today.");
+  if (shotToday) warnings.push("Today is your GLP-1 shot day. Keep it very light or rest.");
+  if (dayAfterShot) warnings.push("Yesterday was your GLP-1 shot day. Your body may still be adjusting — go gentle.");
+  if (nausea === "Severe" || nausea === "Moderate") warnings.push("Nausea is present — avoid anything that elevates heart rate significantly.");
+  if (appetite === "None" && energy < 5) warnings.push("Low appetite and low energy together mean your fuel tank is nearly empty. Prioritize eating something first.");
+
+  // REST day
+  if (migraine || (shotToday && energy <= 4) || (nausea === "Severe") || (energy <= 2)) {
+    return {
+      level: "Rest",
+      levelColor: "#5A6475",
+      title: "Rest & Recover",
+      reason: buildReason(e, dayAfterShot, shotToday),
+      options: null,
+      warnings,
+    };
+  }
+
+  // VERY LIGHT day
+  if (energy <= 4 || sleep <= 4 || hours < 5 || nausea === "Moderate" || (dayAfterShot && energy <= 5) || shotToday) {
+    return {
+      level: "Very Light",
+      levelColor: "#3D7A6A",
+      title: "Gentle Movement Only",
+      reason: buildReason(e, dayAfterShot, shotToday),
+      options: [
+        { icon:"🚶", name:"Easy Walk", detail:"10–20 min, flat surface, slow pace. Fresh air without demanding anything from your body." },
+        { icon:"🧘", name:"Gentle Yoga / Stretching", detail:"15–20 min of slow stretching or restorative yoga. Focus on neck, shoulders, and hips." },
+        { icon:"🌬️", name:"Breathing & Mobility", detail:"5–10 min breathwork followed by gentle neck and shoulder rolls. Great for TMJ tension too." },
+      ],
+      warnings,
+    };
+  }
+
+  // LIGHT day
+  if (energy <= 6 || sleep <= 6 || nausea === "Mild" || (dayAfterShot)) {
+    return {
+      level: "Light",
+      levelColor: "#2C7A5C",
+      title: "Light Movement",
+      reason: buildReason(e, dayAfterShot, shotToday),
+      options: [
+        { icon:"🚶", name:"Brisk Walk", detail:"20–30 min at a comfortable pace. Add gentle hills if you feel up to it." },
+        { icon:"🧘", name:"Yoga", detail:"30 min hatha or slow flow. Avoid hot yoga or anything inverted if nausea is present." },
+        { icon:"🏊", name:"Easy Swim", detail:"20–25 min of leisurely laps. Low impact and great for overall tension." },
+        { icon:"🚲", name:"Easy Cycling", detail:"20–30 min on a flat route or stationary bike at low resistance." },
+      ],
+      warnings,
+    };
+  }
+
+  // MODERATE day
+  if (energy <= 8 || sleep <= 8) {
+    return {
+      level: "Moderate",
+      levelColor: "#1A6A8A",
+      title: "Moderate Workout",
+      reason: buildReason(e, dayAfterShot, shotToday),
+      options: [
+        { icon:"🏃", name:"Moderate Walk / Light Jog", detail:"30–40 min. Mix of brisk walking and light jogging if energy allows." },
+        { icon:"🏊", name:"Swimming", detail:"30 min at a moderate pace. Mix strokes to work different muscle groups." },
+        { icon:"💪", name:"Strength Training", detail:"30 min of bodyweight or light weights. Focus on form over intensity." },
+        { icon:"🚲", name:"Cycling", detail:"30–40 min at a moderate pace, some gentle hills." },
+        { icon:"🧘", name:"Pilates", detail:"30–40 min mat pilates. Great for core without spiking heart rate." },
+      ],
+      warnings,
+    };
+  }
+
+  // GOOD day
+  return {
+    level: "Good Day",
+    levelColor: "#0D5C7A",
+    title: "Full Workout",
+    reason: buildReason(e, dayAfterShot, shotToday),
+    options: [
+      { icon:"🏃", name:"Run / Power Walk", detail:"30–45 min at a challenging but sustainable pace." },
+      { icon:"🏊", name:"Swimming", detail:"30–45 min with varied strokes and moderate intensity." },
+      { icon:"💪", name:"Strength Training", detail:"45 min with moderate weights. Push yourself but don't overdo it." },
+      { icon:"🚲", name:"Cycling", detail:"45 min with some hills or moderate resistance on a stationary bike." },
+      { icon:"🤸", name:"Pilates / Yoga Flow", detail:"45 min of a more vigorous class — power yoga or intermediate pilates." },
+    ],
+    warnings,
+  };
+}
+
+function buildReason(e, dayAfterShot, shotToday) {
+  const parts = [];
+  const energy = Number(e.energy)||0;
+  const sleep = Number(e.sleepQuality)||0;
+  const hours = Number(e.hoursSlept)||0;
+  const nausea = e.nausea||"None";
+  const appetite = e.appetite||"Normal";
+
+  if (energy) parts.push(`energy is ${energy}/10`);
+  if (sleep) parts.push(`sleep quality was ${sleep}/10`);
+  if (hours) parts.push(`you slept ${hours} hrs`);
+  if (nausea !== "None") parts.push(`nausea is ${nausea.toLowerCase()}`);
+  if (appetite === "None" || appetite === "Low") parts.push(`appetite is ${appetite.toLowerCase()}`);
+  if (shotToday) parts.push("today is a GLP-1 shot day");
+  if (dayAfterShot) parts.push("yesterday was your GLP-1 shot day");
+
+  if (!parts.length) return "";
+  return "Based on: " + parts.join(", ") + ".";
+}
+
+function renderExerciseCard(entry, entries) {
+  const s = getExerciseSuggestion(entry, entries);
+  if (!s) return `<div class="exercise-card"><div class="exercise-header"><div class="exercise-header-left"><span>Today's Movement</span></div></div><div class="exercise-body"><p class="not-enough-data">Fill in your energy, sleep, and symptoms above to get a personalized movement suggestion.</p></div></div>`;
+
+  let html = `<div class="exercise-card">
+    <div class="exercise-header">
+      <div class="exercise-header-left">
+        <span>Today's Movement</span>
+      </div>
+      <span class="exercise-level-badge" style="background:${s.levelColor}22;border:1px solid ${s.levelColor}66;color:${s.levelColor === '#5A6475' ? '#9aa0aa' : '#a8d8ea'}">${s.level}</span>
+    </div>
+    <div class="exercise-body">`;
+
+  if (s.warnings.length) {
+    s.warnings.forEach(w => {
+      html += `<div class="exercise-warning">⚠ ${w}</div>`;
+    });
+  }
+
+  html += `<div class="exercise-title">${s.title}</div>`;
+  if (s.reason) html += `<div class="exercise-reason">${s.reason}</div>`;
+
+  if (!s.options) {
+    html += `<div class="exercise-rest">
+      <div class="exercise-rest-title">Full rest today</div>
+      <div class="exercise-rest-sub">Hydrate, sleep, and let your body recover. Movement can wait.</div>
+    </div>`;
+  } else {
+    html += `<div class="exercise-options">`;
+    s.options.forEach(opt => {
+      html += `<div class="exercise-option">
+        <div class="exercise-option-icon">${opt.icon}</div>
+        <div>
+          <div class="exercise-option-name">${opt.name}</div>
+          <div class="exercise-option-detail">${opt.detail}</div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div></div>`;
+  return html;
+}
+
+// ── Views ────────────────────────────────────────────────────────────────────
 function showView(v) {
-  state.view = v;
-  state.detailDate = null;
+  state.view = v; state.detailDate = null;
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
   document.getElementById("nav-"+v).classList.add("active");
   render();
@@ -165,6 +378,11 @@ function renderToday() {
   const cur = state.current;
   let html = "";
 
+  // Exercise suggestion shown on symptoms or notes section
+  if (state.sectionIndex >= 3) {
+    html += renderExerciseCard(cur, state.entries);
+  }
+
   html += `<div class="section-nav">`;
   SECTIONS.forEach((sec,i) => {
     const active = i===state.sectionIndex;
@@ -177,7 +395,6 @@ function renderToday() {
   s.fields.forEach(field => {
     if (field.showIf && cur[field.showIf.key] !== field.showIf.val) return;
     html += `<div class="field"><label class="field-label">${field.label}</label>`;
-
     if (field.type==="textarea") {
       html += `<textarea onchange="setVal('${field.key}',this.value)" oninput="setVal('${field.key}',this.value)" placeholder="${field.placeholder||""}">${cur[field.key]||""}</textarea>`;
     } else if (field.type==="text") {
@@ -216,11 +433,7 @@ function renderToday() {
 function renderHistory() {
   const entries = state.entries;
   let html = `<div class="history-count">${entries.length} ${entries.length===1?"Entry":"Entries"}</div>`;
-
-  if (!entries.length) {
-    html += `<div class="empty-state">No entries yet.<br>Start logging today.</div>`;
-  }
-
+  if (!entries.length) { html += `<div class="empty-state">No entries yet.<br>Start logging today.</div>`; }
   entries.forEach(e => {
     const d = new Date(e.date+"T12:00:00");
     const dateStr = d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
@@ -230,86 +443,61 @@ function renderHistory() {
     if (e.acupuncture==="Yes") tags += `<span class="tag tag-acu">Acupuncture</span>`;
     if (e.appetite) tags += `<span class="tag tag-info">Appetite: ${e.appetite}</span>`;
     if (e.energy) tags += `<span class="tag tag-info">Energy: ${e.energy}/10</span>`;
-
     html += `<div class="history-card" onclick="viewDetail('${e.date}')">
-      <div class="history-top">
-        <div class="history-date">${dateStr}</div>
-        <button class="delete-btn" onclick="event.stopPropagation();deleteEntry('${e.date}')">×</button>
-      </div>
+      <div class="history-top"><div class="history-date">${dateStr}</div>
+      <button class="delete-btn" onclick="event.stopPropagation();deleteEntry('${e.date}')">×</button></div>
       <div class="tags">${tags}</div>
     </div>`;
   });
-
   document.getElementById("main-content").innerHTML = html;
 }
 
 function renderDetail(date) {
   const e = state.entries.find(x=>x.date===date);
   if (!e) { renderHistory(); return; }
-
   const d = new Date(e.date+"T12:00:00");
   const dateStr = d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
-
   let tags = "";
   if (e.migraine==="Yes") tags += `<span class="tag tag-migraine">Migraine</span>`;
   if (e.glpShot==="Yes") tags += `<span class="tag tag-glp">GLP-1</span>`;
   if (e.acupuncture==="Yes") tags += `<span class="tag tag-acu">Acupuncture</span>`;
 
-  let html = `<div class="detail-back">
-    <button onclick="clearDetail()">← History</button>
-    <span class="detail-date">${dateStr}</span>
-  </div>`;
-
+  let html = `<div class="detail-back"><button onclick="clearDetail()">← History</button><span class="detail-date">${dateStr}</span></div>`;
   if (tags) html += `<div class="tags" style="margin-bottom:16px">${tags}</div>`;
 
-  html += `<div class="detail-card">`;
+  // Exercise suggestion in detail view
+  html += renderExerciseCard(e, state.entries);
 
-  // Morning
-  html += `<div class="detail-section">
-    <div class="detail-section-label">Morning</div>`;
+  html += `<div class="detail-card">`;
+  html += `<div class="detail-section"><div class="detail-section-label">Morning</div>`;
   if (e.wakeTime) html += `<div class="detail-row">Woke at ${e.wakeTime}</div>`;
   if (e.retainer) html += `<div class="detail-row sub">Retainer: ${e.retainer}</div>`;
   if (e.morningSx) html += `<div class="detail-row sub">${e.morningSx}</div>`;
   html += `</div>`;
-
-  // Sleep
-  html += `<div class="detail-section">
-    <div class="detail-section-label">Sleep</div>`;
+  html += `<div class="detail-section"><div class="detail-section-label">Sleep</div>`;
   if (e.sleepQuality) html += `<div class="detail-row">Quality: ${e.sleepQuality}/10${e.hoursSlept?" · "+e.hoursSlept+" hrs":""}</div>`;
   html += `</div>`;
-
-  // Nutrition
-  html += `<div class="detail-section">
-    <div class="detail-section-label">Nutrition</div>`;
+  html += `<div class="detail-section"><div class="detail-section-label">Nutrition</div>`;
   if (e.appetite) html += `<div class="detail-row">Appetite: ${e.appetite}</div>`;
   if (e.foodLog) html += `<div class="detail-row sub">${e.foodLog}</div>`;
   if (e.water) html += `<div class="detail-row sub">${e.water}</div>`;
   html += `</div>`;
-
-  // Symptoms
-  html += `<div class="detail-section">
-    <div class="detail-section-label">Symptoms</div>`;
-  let symRow = [];
+  html += `<div class="detail-section"><div class="detail-section-label">Symptoms</div>`;
+  let symRow=[];
   if (e.energy) symRow.push(`Energy: ${e.energy}/10`);
   if (e.nausea) symRow.push(`Nausea: ${e.nausea}`);
   if (e.tmj) symRow.push(`TMJ: ${e.tmj}`);
   if (symRow.length) html += `<div class="detail-row">${symRow.join(" · ")}</div>`;
   html += `</div>`;
-
-  // Treatments
-  html += `<div class="detail-section">
-    <div class="detail-section-label">Treatments</div>`;
+  html += `<div class="detail-section"><div class="detail-section-label">Treatments</div>`;
   if (e.glpShot==="Yes") html += `<div class="detail-row">GLP-1 shot today</div>`;
   if (e.acupuncture==="Yes") html += `<div class="detail-row">Acupuncture</div>`;
   if (e.dentist==="Yes") html += `<div class="detail-row">Dentist / TMJ appt</div>`;
   if (e.supplements) html += `<div class="detail-row sub">Supplements: ${e.supplements}</div>`;
   html += `</div>`;
-
-  // Migraine
   if (e.migraine==="Yes") {
-    html += `<div class="detail-section">
-      <div class="detail-section-label">Migraine</div>`;
-    let mRow = [];
+    html += `<div class="detail-section"><div class="detail-section-label">Migraine</div>`;
+    let mRow=[];
     if (e.migraineStart) mRow.push(`Started ${e.migraineStart}`);
     if (e.migraineDuration) mRow.push(`${e.migraineDuration} hrs`);
     if (e.migraineSeverity) mRow.push(`Severity ${e.migraineSeverity}/10`);
@@ -319,45 +507,26 @@ function renderDetail(date) {
     if (e.migraineRelief) html += `<div class="detail-row sub">${e.migraineRelief}</div>`;
     html += `</div>`;
   }
-
-  // Notes
-  if (e.notes) {
-    html += `<div class="detail-section">
-      <div class="detail-section-label">Notes</div>
-      <div class="detail-row">${e.notes}</div>
-    </div>`;
-  }
-
+  if (e.notes) { html += `<div class="detail-section"><div class="detail-section-label">Notes</div><div class="detail-row">${e.notes}</div></div>`; }
   html += `</div>`;
   html += `<button class="detail-edit-btn" onclick="editEntry('${e.date}')">Edit this entry</button>`;
-
   document.getElementById("main-content").innerHTML = html;
   window.scrollTo(0,0);
 }
 
-function viewDetail(date) {
-  state.detailDate = date;
-  renderDetail(date);
-}
-
-function clearDetail() {
-  state.detailDate = null;
-  renderHistory();
-}
-
+function viewDetail(date) { state.detailDate=date; renderDetail(date); }
+function clearDetail() { state.detailDate=null; renderHistory(); }
 function setVal(key,val) { state.current[key]=val; }
 
 function goSection(i) {
   if (i<0||i>=SECTIONS.length) return;
-  state.sectionIndex=i;
-  render();
-  window.scrollTo(0,0);
+  state.sectionIndex=i; render(); window.scrollTo(0,0);
 }
 
 function saveEntry() {
-  const entry = {...state.current};
+  const entry={...state.current};
   if (!entry.date) entry.date=todayStr();
-  state.entries = state.entries.filter(e=>e.date!==entry.date);
+  state.entries=state.entries.filter(e=>e.date!==entry.date);
   state.entries.unshift(entry);
   state.entries.sort((a,b)=>b.date.localeCompare(a.date));
   save();
@@ -376,9 +545,7 @@ function editEntry(date) {
 function deleteEntry(date) {
   if(!confirm("Delete this entry?")) return;
   state.entries=state.entries.filter(e=>e.date!==date);
-  save();
-  state.detailDate=null;
-  renderHistory();
+  save(); state.detailDate=null; renderHistory();
 }
 
 function exportCSV() {
