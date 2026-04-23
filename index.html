@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Health Log">
+<title>Health Log</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  
+  :root {
+    --bg: #0f1923;
+    --bg2: #1a2a3a;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.09);
+    --text: #e8dcc8;
+    --muted: #7a9e9f;
+    --dim: #888;
+    --morning: #4A7C6F;
+    --sleep: #3D5A80;
+    --nutrition: #048A81;
+    --symptoms: #C0392B;
+    --treatments: #7B4F9E;
+    --migraine: #B5451B;
+    --notes: #5A6475;
+  }
+
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    background: linear-gradient(135deg, var(--bg) 0%, var(--bg2) 50%, var(--bg) 100%);
+    min-height: 100vh;
+    color: var(--text);
+    padding-bottom: 80px;
+  }
+
+  /* Header */
+  .header {
+    background: rgba(0,0,0,0.45);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-end; }
+  .header-label { font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 3px; }
+  .header-title { font-size: 20px; color: var(--text); font-weight: normal; }
+  .export-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--dim);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+  }
+
+  /* Bottom Nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(10,18,28,0.97);
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1;
+    padding: 14px 8px 18px;
+    background: transparent;
+    border: none;
+    color: var(--dim);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s;
+  }
+  .nav-btn.active { color: var(--nutrition); }
+  .nav-icon { font-size: 18px; }
+
+  /* Main content */
+  .main { max-width: 600px; margin: 0 auto; padding: 22px 16px; }
+
+  /* Section pills */
+  .section-nav {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+  .section-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: #999;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .section-pill.active { color: #fff; }
+
+  /* Card */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .card-header {
+    padding: 13px 20px;
+    display: flex;
+    align-items: center;
+  }
+  .card-header span { font-size: 14px; color: #fff; letter-spacing: 1px; }
+  .card-body { padding: 20px; }
+
+  /* Fields */
+  .field { margin-bottom: 20px; }
+  .field:last-child { margin-bottom: 0; }
+  .field-label {
+    display: block;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 9px;
+  }
+  input[type=text], input[type=date], input[type=time], input[type=number], textarea, select {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 9px;
+    color: var(--text);
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    color-scheme: dark;
+  }
+  input[type=number] { width: 100px; }
+  textarea { resize: vertical; line-height: 1.6; min-height: 80px; }
+  input:focus, textarea:focus, select:focus { border-color: rgba(255,255,255,0.25); }
+
+  /* Select options */
+  .options { display: flex; gap: 8px; flex-wrap: wrap; }
+  .option-btn {
+    padding: 9px 18px;
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: #bbb;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .option-btn.selected { color: #fff; }
+
+  /* Slider */
+  .slider-row { display: flex; align-items: center; gap: 14px; }
+  input[type=range] { flex: 1; height: 4px; }
+  .slider-val { font-size: 24px; min-width: 36px; text-align: center; font-weight: normal; }
+
+  /* Nav buttons */
+  .nav-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .btn-nav {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #aaa;
+    padding: 11px 22px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .btn-nav:disabled { color: #333; border-color: rgba(255,255,255,0.06); cursor: default; }
+  .btn-save {
+    flex: 1;
+    background: rgba(74,124,111,0.2);
+    border: 1px solid var(--morning);
+    color: #7ac9b8;
+    padding: 12px 22px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 15px;
+    font-family: inherit;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+  }
+  .btn-save.saved { background: var(--morning); color: #fff; }
+
+  /* History */
+  .history-count { font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 18px; }
+  .history-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .history-card:active { border-color: rgba(255,255,255,0.2); }
+  .history-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .history-date { font-size: 15px; color: var(--text); }
+  .delete-btn { background: none; border: none; color: #444; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 2px; }
+  .tags { display: flex; gap: 7px; flex-wrap: wrap; }
+  .tag {
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+  .tag-migraine { background: rgba(181,69,27,0.25); border: 1px solid var(--migraine); color: #e88; }
+  .tag-glp { background: rgba(123,79,158,0.25); border: 1px solid var(--treatments); color: #c9a6e8; }
+  .tag-acu { background: rgba(4,138,129,0.25); border: 1px solid var(--nutrition); color: #7ac9b8; }
+  .tag-info { color: var(--dim); font-size: 12px; }
+
+  .empty-state { color: #444; text-align: center; padding: 60px 0; font-size: 15px; line-height: 1.7; }
+
+  /* Install banner */
+  .install-banner {
+    background: rgba(74,124,111,0.15);
+    border: 1px solid rgba(74,124,111,0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #7ac9b8;
+    line-height: 1.5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .dismiss-banner { background: none; border: none; color: #4A7C6F; font-size: 18px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div>
+      <div class="header-label">Daily Wellness</div>
+      <div class="header-title">Health Log</div>
+    </div>
+    <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+  </div>
+</div>
+
+<div class="main" id="main-content"></div>
+
+<div class="bottom-nav">
+  <button class="nav-btn active" id="nav-today" onclick="showView('today')">
+    <span class="nav-icon">✦</span>Today
+  </button>
+  <button class="nav-btn" id="nav-history" onclick="showView('history')">
+    <span class="nav-icon">◈</span>History
+  </button>
+</div>
+
+<script>
+const SECTIONS = [
+  {
+    id: "morning", label: "Morning", color: "#4A7C6F",
+    fields: [
+      { key: "date", label: "Date", type: "date" },
+      { key: "wakeTime", label: "Wake Time", type: "time" },
+      { key: "retainer", label: "Retainer Worn?", type: "select", options: ["Yes", "No"] },
+      { key: "morningSx", label: "Morning Symptoms (neck/shoulder tension, grinding, etc.)", type: "textarea" },
+    ]
+  },
+  {
+    id: "sleep", label: "Sleep", color: "#3D5A80",
+    fields: [
+      { key: "sleepQuality", label: "Sleep Quality (1–10)", type: "slider", min: 1, max: 10 },
+      { key: "hoursSlept", label: "Hours Slept", type: "number", step: 0.5, min: 0, max: 14 },
+    ]
+  },
+  {
+    id: "nutrition", label: "Nutrition", color: "#048A81",
+    fields: [
+      { key: "appetite", label: "Appetite Level", type: "select", options: ["None", "Low", "Moderate", "Normal"] },
+      { key: "foodLog", label: "Food Log (all meals & snacks)", type: "textarea" },
+      { key: "water", label: "Water / Electrolytes", type: "text", placeholder: "e.g. Element + 40oz water" },
+    ]
+  },
+  {
+    id: "symptoms", label: "Symptoms", color: "#C0392B",
+    fields: [
+      { key: "nausea", label: "Nausea Level", type: "select", options: ["None", "Mild", "Moderate", "Severe"] },
+      { key: "energy", label: "Energy Level (1–10)", type: "slider", min: 1, max: 10 },
+      { key: "tmj", label: "TMJ Flare-Up?", type: "select", options: ["No", "Mild", "Yes"] },
+    ]
+  },
+  {
+    id: "treatments", label: "Treatments", color: "#7B4F9E",
+    fields: [
+      { key: "glpShot", label: "GLP-1 Shot Today?", type: "select", options: ["No", "Yes"] },
+      { key: "supplements", label: "Supplements Taken", type: "textarea", placeholder: "List each one" },
+      { key: "acupuncture", label: "Acupuncture Today?", type: "select", options: ["No", "Yes"] },
+      { key: "dentist", label: "Dentist / TMJ Appt?", type: "select", options: ["No", "Yes"] },
+    ]
+  },
+  {
+    id: "migraine", label: "Migraine", color: "#B5451B",
+    fields: [
+      { key: "migraine", label: "Migraine Today?", type: "select", options: ["No", "Yes"] },
+      { key: "migraineStart", label: "Start Time", type: "time", showIf: {key:"migraine",val:"Yes"} },
+      { key: "migraineDuration", label: "Duration (hrs)", type: "number", step: 0.5, min: 0, max: 24, showIf: {key:"migraine",val:"Yes"} },
+      { key: "migraineSeverity", label: "Severity (1–10)", type: "slider", min: 1, max: 10, showIf: {key:"migraine",val:"Yes"} },
+      { key: "migraineTrigger", label: "Possible Trigger", type: "text", showIf: {key:"migraine",val:"Yes"} },
+      { key: "sumatriptan", label: "Sumatriptan Taken?", type: "select", options: ["No", "Yes"], showIf: {key:"migraine",val:"Yes"} },
+      { key: "migraineRelief", label: "What Helped", type: "text", showIf: {key:"migraine",val:"Yes"} },
+    ]
+  },
+  {
+    id: "notes", label: "Notes", color: "#5A6475",
+    fields: [
+      { key: "notes", label: "General Notes", type: "textarea" },
+    ]
+  }
+];
+
+let state = {
+  view: "today",
+  sectionIndex: 0,
+  current: { date: todayStr(), id: Date.now() },
+  entries: [],
+  showBanner: true,
+};
+
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+// Persistence
+function save() {
+  try { localStorage.setItem("hlz_entries", JSON.stringify(state.entries)); } catch(e) {}
+}
+function load() {
+  try {
+    const d = localStorage.getItem("hlz_entries");
+    if (d) state.entries = JSON.parse(d);
+    const b = localStorage.getItem("hlz_banner");
+    if (b === "0") state.showBanner = false;
+  } catch(e) {}
+}
+
+function showView(v) {
+  state.view = v;
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("nav-" + v).classList.add("active");
+  render();
+}
+
+function render() {
+  if (state.view === "today") renderToday();
+  else renderHistory();
+}
+
+function renderToday() {
+  const s = SECTIONS[state.sectionIndex];
+  const cur = state.current;
+  let html = "";
+
+  if (state.showBanner) {
+    html += `<div class="install-banner">
+      <span>💡 Save this file to your phone's home screen to open it like an app anytime.</span>
+      <button class="dismiss-banner" onclick="dismissBanner()">×</button>
+    </div>`;
+  }
+
+  // Section pills
+  html += `<div class="section-nav">`;
+  SECTIONS.forEach((sec, i) => {
+    const active = i === state.sectionIndex;
+    html += `<button class="section-pill${active?" active":""}" 
+      style="${active?`background:${sec.color};border-color:${sec.color};`:""}"
+      onclick="goSection(${i})">${sec.label}</button>`;
+  });
+  html += `</div>`;
+
+  // Card
+  html += `<div class="card">
+    <div class="card-header" style="background:${s.color}">
+      <span>${s.label}</span>
+    </div>
+    <div class="card-body">`;
+
+  s.fields.forEach(field => {
+    if (field.showIf && cur[field.showIf.key] !== field.showIf.val) return;
+    html += `<div class="field">
+      <label class="field-label">${field.label}</label>`;
+
+    if (field.type === "textarea") {
+      html += `<textarea onchange="setVal('${field.key}',this.value)" oninput="setVal('${field.key}',this.value)" placeholder="${field.placeholder||""}">${cur[field.key]||""}</textarea>`;
+    } else if (field.type === "text") {
+      html += `<input type="text" value="${escHtml(cur[field.key]||"")}" placeholder="${field.placeholder||""}" oninput="setVal('${field.key}',this.value)">`;
+    } else if (field.type === "date" || field.type === "time") {
+      html += `<input type="${field.type}" value="${cur[field.key]||""}" onchange="setVal('${field.key}',this.value)">`;
+    } else if (field.type === "number") {
+      html += `<input type="number" value="${cur[field.key]||""}" step="${field.step||1}" min="${field.min||0}" max="${field.max||100}" oninput="setVal('${field.key}',this.value)" style="width:100px">`;
+    } else if (field.type === "select") {
+      html += `<div class="options">`;
+      field.options.forEach(opt => {
+        const sel = cur[field.key] === opt;
+        html += `<button class="option-btn${sel?" selected":""}"
+          style="${sel?`background:${s.color};border-color:${s.color};`:""}"
+          onclick="setVal('${field.key}','${opt}');render()">${opt}</button>`;
+      });
+      html += `</div>`;
+    } else if (field.type === "slider") {
+      const val = cur[field.key] || field.min;
+      html += `<div class="slider-row">
+        <input type="range" min="${field.min}" max="${field.max}" value="${val}"
+          style="accent-color:${s.color}"
+          oninput="setVal('${field.key}',+this.value);document.getElementById('sv_${field.key}').textContent=this.value">
+        <span class="slider-val" id="sv_${field.key}" style="color:${s.color}">${val}</span>
+      </div>`;
+    }
+
+    html += `</div>`;
+  });
+
+  html += `</div></div>`;
+
+  // Nav row
+  const isFirst = state.sectionIndex === 0;
+  const isLast = state.sectionIndex === SECTIONS.length - 1;
+  html += `<div class="nav-row">
+    <button class="btn-nav" onclick="goSection(${state.sectionIndex-1})" ${isFirst?"disabled":""}>← Back</button>
+    <button class="btn-save" id="save-btn" onclick="saveEntry()">Save Entry</button>
+    <button class="btn-nav" onclick="goSection(${state.sectionIndex+1})" ${isLast?"disabled":""}>Next →</button>
+  </div>`;
+
+  document.getElementById("main-content").innerHTML = html;
+}
+
+function renderHistory() {
+  const entries = state.entries;
+  let html = `<div class="history-count">${entries.length} ${entries.length===1?"Entry":"Entries"}</div>`;
+
+  if (!entries.length) {
+    html += `<div class="empty-state">No entries yet.<br>Start logging today.</div>`;
+  }
+
+  entries.forEach(e => {
+    const d = new Date(e.date + "T12:00:00");
+    const dateStr = d.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
+    let tags = "";
+    if (e.migraine === "Yes") tags += `<span class="tag tag-migraine">Migraine</span>`;
+    if (e.glpShot === "Yes") tags += `<span class="tag tag-glp">GLP-1</span>`;
+    if (e.acupuncture === "Yes") tags += `<span class="tag tag-acu">Acupuncture</span>`;
+    if (e.appetite) tags += `<span class="tag tag-info">Appetite: ${e.appetite}</span>`;
+    if (e.energy) tags += `<span class="tag tag-info">Energy: ${e.energy}/10</span>`;
+
+    html += `<div class="history-card" onclick="editEntry('${e.date}')">
+      <div class="history-top">
+        <div class="history-date">${dateStr}</div>
+        <button class="delete-btn" onclick="event.stopPropagation();deleteEntry('${e.date}')">×</button>
+      </div>
+      <div class="tags">${tags}</div>
+    </div>`;
+  });
+
+  document.getElementById("main-content").innerHTML = html;
+}
+
+function setVal(key, val) {
+  state.current[key] = val;
+}
+
+function goSection(i) {
+  if (i < 0 || i >= SECTIONS.length) return;
+  state.sectionIndex = i;
+  render();
+  window.scrollTo(0,0);
+}
+
+function saveEntry() {
+  const entry = { ...state.current };
+  if (!entry.date) entry.date = todayStr();
+  state.entries = state.entries.filter(e => e.date !== entry.date);
+  state.entries.unshift(entry);
+  state.entries.sort((a,b) => b.date.localeCompare(a.date));
+  save();
+  const btn = document.getElementById("save-btn");
+  if (btn) { btn.textContent = "✓ Saved"; btn.classList.add("saved"); setTimeout(()=>{ btn.textContent="Save Entry"; btn.classList.remove("saved"); }, 2000); }
+}
+
+function editEntry(date) {
+  const e = state.entries.find(x => x.date === date);
+  if (e) { state.current = { ...e }; state.sectionIndex = 0; state.view = "today"; }
+  document.getElementById("nav-today").classList.add("active");
+  document.getElementById("nav-history").classList.remove("active");
+  render();
+}
+
+function deleteEntry(date) {
+  if (!confirm("Delete this entry?")) return;
+  state.entries = state.entries.filter(e => e.date !== date);
+  save();
+  renderHistory();
+}
+
+function dismissBanner() {
+  state.showBanner = false;
+  try { localStorage.setItem("hlz_banner","0"); } catch(e) {}
+  render();
+}
+
+function exportCSV() {
+  const keys = ["date","wakeTime","retainer","morningSx","sleepQuality","hoursSlept",
+    "appetite","foodLog","water","nausea","energy","tmj",
+    "glpShot","supplements","acupuncture","dentist",
+    "migraine","migraineStart","migraineDuration","migraineSeverity","migraineTrigger","sumatriptan","migraineRelief",
+    "notes"];
+  const header = keys.join(",");
+  const rows = state.entries.map(e => keys.map(k => `"${(e[k]||"").toString().replace(/"/g,'""')}"`).join(","));
+  const csv = [header,...rows].join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "health_log.csv"; a.click();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Init
+load();
+// Pre-fill today's date
+if (!state.current.date) state.current.date = todayStr();
+render();
+</script>
+</body>
+</html>
